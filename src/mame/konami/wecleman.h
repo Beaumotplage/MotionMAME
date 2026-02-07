@@ -12,6 +12,7 @@
 #include "emupal.h"
 #include "screen.h"
 #include "tilemap.h"
+#include "..\sega\motorsim.h"
 
 class wecleman_state : public driver_device
 {
@@ -37,6 +38,10 @@ public:
 		, m_palette(*this, "palette")
 		, m_screen(*this, "screen")
 		, m_led(*this, "led%u", 0U)
+		, m_yaw_pos_out(*this, "yaw")
+		, m_motorcode_out(*this, "motorcode")
+		, m_rotate_motor_sim(61, 192, 2.0f, true)
+
 	{ }
 
 	void wecleman(machine_config &config);
@@ -93,6 +98,7 @@ protected:
 	void irqctrl_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
 	void selected_ip_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
 	uint8_t selected_ip_r();
+	void fcout(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
 	void blitter_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
 
 	void wecleman_txtram_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
@@ -126,6 +132,8 @@ protected:
 	required_device<screen_device> m_screen;
 
 	output_finder<1> m_led;
+	output_finder<> m_yaw_pos_out;
+	output_finder<> m_motorcode_out;
 
 	void wecleman_map(address_map &map) ATTR_COLD;
 	void wecleman_sound_map(address_map &map) ATTR_COLD;
@@ -156,6 +164,13 @@ protected:
 	int m_spr_idx_list[NUM_SPRITES]{};
 	int m_spr_pri_list[NUM_SPRITES]{};
 	sprite_t m_sprite_list[NUM_SPRITES]{};
+
+	int m_motorcode;
+	uint8_t m_motor_pos;
+
+public:
+	motor m_rotate_motor_sim;
+
 };
 
 class hotchase_state : public wecleman_state
@@ -179,7 +194,7 @@ private:
 	void hotchase_draw_road(bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void hotchase_paletteram16_SBGRBBBBGGGGRRRR_word_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
-
+	void fcout(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
 	K051316_CB_MEMBER(hotchase_zoom_callback_1);
 	K051316_CB_MEMBER(hotchase_zoom_callback_2);
 

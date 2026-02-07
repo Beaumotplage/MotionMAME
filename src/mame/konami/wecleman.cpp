@@ -400,10 +400,26 @@ uint8_t wecleman_state::selected_ip_r()
 		case 0:  return ioport("ACCEL")->read();        // Accel - Schems: Accelevr
 		case 1:  return 0;                                              // ????? - Schems: Not Used
 		case 2:  return ioport("STEER")->read();        // Wheel - Schems: Handlevr
-		case 3:  return 0;                                              // Table - Schems: Turnvr
+		case 3:  return m_motor_pos;                                              // Table - Schems: Turnvr
 
 		default: return 0;
 	}
+}
+
+/* FCOUT buffer on schematic
+   Bit0-3 - turn motor speed code
+   Bit4 - 'thon'
+   Bit5 - Start lamp (AND this with selected_ip_w bit 2)
+ */
+void wecleman_state::fcout(offs_t offset, uint16_t data, uint16_t mem_mask)
+{
+	m_motorcode = data & 0xf;
+	//TODO: add the other lamps and stuff
+}
+
+void hotchase_state::fcout(offs_t offset, uint16_t data, uint16_t mem_mask)
+{
+	m_motorcode = data & 0xf;
 }
 
 /* Word Blitter - Copies data around (Work RAM, Sprite RAM etc.)
@@ -519,7 +535,7 @@ void wecleman_state::blitter_w(offs_t offset, uint16_t data, uint16_t mem_mask)
                     WEC Le Mans 24 Main CPU Handlers
 ***************************************************************************/
 
-void wecleman_state::wecleman_map(address_map &map)
+void wecleman_state::wecleman_map(address_map& map)
 {
 	map(0x000000, 0x03ffff).rom(); // ROM (03c000-03ffff used as RAM sometimes!)
 	map(0x040000, 0x040493).ram(); // RAM
@@ -542,9 +558,8 @@ void wecleman_state::wecleman_map(address_map &map)
 	map(0x140014, 0x140015).portr("DSWA");   // DSW 2
 	map(0x140016, 0x140017).portr("DSWB");   // DSW 1
 	map(0x140021, 0x140021).rw("adc", FUNC(adc0804_device::read), FUNC(adc0804_device::write));
-	map(0x140030, 0x140031).nopw();    // toggles between 0 & 1 on hitting bumps and crashes (vibration?)
+	map(0x140030, 0x140031).w(FUNC(wecleman_state::fcout));
 }
-
 
 /***************************************************************************
                         Hot Chase Main CPU Handlers
@@ -575,7 +590,7 @@ void hotchase_state::hotchase_map(address_map &map)
 	map(0x140016, 0x140017).portr("DSW1");   // DSW 1
 	map(0x140021, 0x140021).rw("adc", FUNC(adc0804_device::read), FUNC(adc0804_device::write)); // Paired with writes to $140003
 	map(0x140022, 0x140023).nopr(); // read and written at $601c0, unknown purpose
-	map(0x140030, 0x140031).nopw();    // signal to cabinet vibration motors?
+	map(0x140030, 0x140031).w(FUNC(hotchase_state::fcout));   
 }
 
 
@@ -796,9 +811,9 @@ static INPUT_PORTS_START( wecleman )
 	PORT_DIPNAME( 0x01, 0x01, "Speed Unit" )
 	PORT_DIPSETTING(    0x01, "km/h" )
 	PORT_DIPSETTING(    0x00, "mph" )
-	PORT_DIPNAME( 0x02, 0x02, "Unknown B-1" )   // single
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME(0x02, 0x02, "Motor Control")
+	PORT_DIPSETTING(0x02, DEF_STR(Off)) // Wec Mini Spin. Upright
+	PORT_DIPSETTING(0x00, DEF_STR(On))  // Wec Spin Type
 	PORT_DIPNAME( 0x04, 0x04, "Unknown B-2" )
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
@@ -1015,8 +1030,17 @@ TIMER_DEVICE_CALLBACK_MEMBER(wecleman_state::wecleman_scanline)
 {
 	int scanline = param;
 
-	if(scanline == 232) // vblank irq
+	if (scanline == 232) // vblank irq
+	{
+		const int8_t speedmap[16]{ 0,-7,-6,-5,-4,-3,-2,-1, 0,7,6,5,4,3,2,1 };
+	
+		m_motor_pos = m_rotate_motor_sim.run(speedmap[m_motorcode & 0xF],false);
+		m_yaw_pos_out = 255-m_motor_pos; //invert
+		m_motorcode_out = m_motorcode;
+
 		m_maincpu->set_input_line(4, HOLD_LINE);
+
+	}
 	else if(((scanline % 64) == 0)) // timer irq TODO: wrong place maybe? Could do with blitter chip irq (007643/007645?) or "V-CNT" signal.
 		m_maincpu->set_input_line(5, HOLD_LINE);
 }
@@ -1032,11 +1056,15 @@ TIMER_DEVICE_CALLBACK_MEMBER(hotchase_state::hotchase_scanline)
 void wecleman_state::machine_reset()
 {
 	m_k007232[0]->set_bank( 0, 1 );
+
+	m_rotate_motor_sim.reset();
 }
 
 void wecleman_state::machine_start()
 {
 	m_led.resolve();
+	m_yaw_pos_out.resolve();
+	m_motorcode_out.resolve();
 }
 
 void wecleman_state::wecleman(machine_config &config)

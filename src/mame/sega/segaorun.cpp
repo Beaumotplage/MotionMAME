@@ -376,20 +376,16 @@ uint8_t segaorun_state::bankmotor_limit_r()
 	//  D4: center
 	//  D3: right limit
 	//  other bits: ?
-	uint8_t pos = m_bankmotor_pos >> 8 & 0xff;
 
-	// these values may need to be tweaked when hooking up real motors to MAME
-	const int left_limit = 0x20;
-	const int center = 0x80;
-	const int right_limit = 0xe0;
-	const int tolerance = 2;
-
-	if (pos <= left_limit + tolerance)
+	if (m_leftright_motor_sim.getLowerLimit())
 		ret ^= 0x20;
-	else if (pos >= center - tolerance && pos <= center + tolerance)
-		ret ^= 0x10;
-	else if (pos >= right_limit - tolerance)
+
+	if (m_leftright_motor_sim.getUpperLimit())
 		ret ^= 0x08;
+
+
+	if (m_leftright_motor_sim.getCentre())
+		ret ^= 0x10;
 
 	if (!m_adc->intr_r())
 		ret ^= 0x40;
@@ -405,33 +401,9 @@ uint8_t segaorun_state::bankmotor_limit_r()
 
 void segaorun_state::bankmotor_control_w(uint8_t data)
 {
-	// PPI Output port B
-	data &= 0x0f;
 
-	if (data == 0)
-		return;
+	m_motorcode = data & 0xf;
 
-	m_bankmotor_delta = 8 - data;
-
-	// convert to speed and direction for output
-	if (data < 8)
-	{
-		// left
-		m_bank_motor_direction = 1;
-		m_bank_motor_speed = 8 - data;
-	}
-	else if (data == 8)
-	{
-		// no movement
-		m_bank_motor_direction = 0;
-		m_bank_motor_speed = 0;
-	}
-	else
-	{
-		// right
-		m_bank_motor_direction = 2;
-		m_bank_motor_speed = data - 8;
-	}
 }
 
 
@@ -532,11 +504,11 @@ void segaorun_state::nop_w(address_space &space, offs_t offset, uint16_t data, u
 
 void segaorun_state::machine_start()
 {
-	m_bank_motor_direction.resolve();
-	m_bank_motor_speed.resolve();
 	m_vibration_motor.resolve();
-	m_start_lamp.resolve();
-	m_brake_lamp.resolve();
+	//m_start_lamp.resolve();
+	//m_brake_lamp.resolve();
+	m_lampword_out.resolve();
+	m_roll_pos.resolve();
 }
 
 //-------------------------------------------------
@@ -618,19 +590,22 @@ TIMER_CALLBACK_MEMBER(segaorun_state::scanline_tick)
 
 TIMER_DEVICE_CALLBACK_MEMBER(segaorun_state::bankmotor_update)
 {
-	// arbitrary timer for updating bank motor position
-	// these values may need to be tweaked when hooking up real motors to MAME
-	const int speed = 100;
-	const int left_limit = 0x2000;
-	const int right_limit = 0xe000;
 
-	m_bankmotor_pos += speed * m_bankmotor_delta;
-	if (m_bankmotor_pos <= left_limit)
-		m_bankmotor_pos = left_limit;
-	else if (m_bankmotor_pos >= right_limit)
-		m_bankmotor_pos = right_limit;
+	// Stick this here for now
+	bool brake = false;
+	if (m_motorcode == 0)
+	{
+		brake = true;
+	}
+
+	m_adc_lr = m_leftright_motor_sim.run(m_motorcode - 8, brake);
+
+	m_roll_pos = m_adc_lr; //(int)(128.0f + (1.0f * (float)(m_adc_lr - 128)));
+
+	m_lampword_out = m_lamps.word;
+
+
 }
-
 
 
 //**************************************************************************
@@ -696,8 +671,11 @@ void segaorun_state::outrun_custom_io_w(offs_t offset, uint16_t data, uint16_t m
 				//  other bits: ?
 				machine().sound().system_mute(!BIT(data, 7));
 				m_vibration_motor = BIT(data, 5);
-				m_start_lamp = BIT(data, 2);
-				m_brake_lamp = BIT(data, 1);
+			    //	m_start_lamp = BIT(data, 2);
+				//  m_brake_lamp = BIT(data, 1);
+
+				m_lamps.bits.start = BIT(data, 2);
+				m_lamps.bits.brake = BIT(data, 1);
 			}
 			return;
 
@@ -773,7 +751,8 @@ void segaorun_state::shangon_custom_io_w(offs_t offset, uint16_t data, uint16_t 
 				m_adc_select = data >> 6 & 3;
 				m_segaic16vid->set_display_enable(BIT(data, 5));
 				m_vibration_motor = BIT(data, 3);
-				m_start_lamp = BIT(data, 2);
+				//m_start_lamp = BIT(data, 2);
+				m_lamps.bits.start = BIT(data, 2);
 			}
 			return;
 
@@ -914,7 +893,7 @@ void segaorun_state::sound_portmap(address_map &map)
 
 ioport_value segaorun_state::bankmotor_pos_r()
 {
-	return m_bankmotor_pos >> 8 & 0xff;
+	return m_adc_lr & 0xFF; //todo getter, not global
 }
 
 
@@ -1225,7 +1204,7 @@ void segaorun_state::outrundx(machine_config &config)
 	outrun_base(config);
 
 	// basic machine hardware
-	TIMER(config, "bankmotor").configure_periodic(FUNC(segaorun_state::bankmotor_update), attotime::from_msec(10));
+	TIMER(config, "bankmotor").configure_periodic(FUNC(segaorun_state::bankmotor_update), attotime::from_msec(16.6));
 
 	// video hardware
 	SEGA_OUTRUN_SPRITES(config, m_sprites, 0);
@@ -3058,6 +3037,8 @@ void segaorun_state::init_outrun()
 	init_generic();
 	m_custom_io_r = read16m_delegate(*this, FUNC(segaorun_state::outrun_custom_io_r));
 	m_custom_io_w = write16s_delegate(*this, FUNC(segaorun_state::outrun_custom_io_w));
+
+	m_leftright_motor_sim.reset();
 }
 
 void segaorun_state::init_outrunb()

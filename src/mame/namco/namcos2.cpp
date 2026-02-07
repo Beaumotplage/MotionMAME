@@ -587,6 +587,21 @@ void namcos2_state::dpram_word_w(offs_t offset, u16 data, u16 mem_mask)
 	{
 		m_dpram[offset] = data & 0xff;
 
+		/*
+		  Motion output for Metal Hawk
+		  Tapping into the comms to MCU as
+		  a) MCU doesn't emulate SCI
+		  b) SCI goes nowhere as motor drive CPU not dumped
+
+		  Not ideal as almost just joystick positions
+		  (does contain a command bit too)
+		 */ 
+
+		if (offset == 0x68 / 2)
+		{
+			m_motorcode = data;
+		}
+
 		/* Note:  Outputs for the other gun games pass through here as well, but I couldn't find the offsets. */
 		/* Steel Gunner 1 & 2 have 6 "damage lamps" (three on each side) as well as gun recoils. */
 	}
@@ -1739,6 +1754,59 @@ TIMER_DEVICE_CALLBACK_MEMBER(namcos2_state::screen_scanline)
 	{
 		m_master_intc->vblank_irq_trigger();
 		m_slave_intc->vblank_irq_trigger();
+
+		static int pitch, roll, height, status;
+
+		/* Motion control
+		A bit of artistic licence used here as
+		motor drive CPU not dumped
+		Main PCB just seems to relay control positions
+		Plus a very useful command bit
+		*/
+
+		if (m_motorcode < 0x40)
+		{
+			pitch = m_motorcode - 0x20;
+		}
+		else if (m_motorcode < 0x80)
+		{
+			roll = m_motorcode - 0x60;
+		}
+		else if (m_motorcode < 0xc0)
+		{
+			height = m_motorcode - 0xa0;
+		}
+		else
+		{
+			status = m_motorcode - 0xc0;
+		}
+
+
+		// Making this based on videos
+		// Changing helicopter height will pitch the sim
+		// Left and right rolls the sim.
+
+		if (status == 0)
+		{
+			// No movement (title screen etc)
+			pitch = 0;
+			roll = 0;
+			height = 0;
+		}
+		else if (status == 1)
+		{
+			//Normal movement
+
+		}
+		else if (status == 3)
+		{
+			// Crash spiral
+			roll = 16;
+			height = 16;
+		}
+		m_pitch_pos_out = m_updown_motor_sim.run_open_loop(128 + (-height * 4), 1);
+		m_roll_pos_out = m_leftright_motor_sim.run_open_loop(128 + (roll * 4), 1);
+
 	}
 
 	if (scanline == cur_posirq)
@@ -1830,6 +1898,9 @@ void namcos2_state::base(machine_config &config)
 {
 	base_noio(config);
 	configure_c65_standard(config);
+
+	m_updown_motor_sim.reset();
+	m_leftright_motor_sim.reset();
 }
 
 void namcos2_state::base_c68(machine_config &config)
@@ -5619,6 +5690,9 @@ void namcos2_state::init_metlhawk()
 	} /* next i */
 
 	m_gametype = NAMCOS2_METAL_HAWK;
+
+	m_roll_pos_out.resolve();
+	m_pitch_pos_out.resolve();
 }
 
 void namcos2_state::init_mirninja()

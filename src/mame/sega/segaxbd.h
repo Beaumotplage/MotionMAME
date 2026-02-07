@@ -26,6 +26,7 @@
 #include "emupal.h"
 #include "screen.h"
 
+#include "motorsim.h"
 // ======================> segaxbd_state
 
 
@@ -141,10 +142,45 @@ protected:
 	required_ioport m_io0_porta;
 	optional_ioport_array<8> m_adc_ports;
 	optional_ioport_array<4> m_mux_ports;
-	output_finder<4> m_lamps;
+	output_finder<> m_lampword_out;
+	output_finder<> m_roll_pos_out;
+	output_finder<> m_pitch_pos_out;
+	output_finder<> m_yaw_pos_out;
+
 
 	virtual void device_start() override ATTR_COLD;
 	virtual void device_reset() override ATTR_COLD;
+
+	int m_motorcode;
+	int m_adc_ud;
+	int m_adc_lr;
+
+	bool m_smgp;
+	int m_smgp_yaw_tgt;
+	int m_smgp_left_tgt;
+	int m_smgp_left_spd;
+	int m_smgp_right_tgt;
+	int m_smgp_right_spd;
+
+	union {
+		uint16_t word;
+		struct
+		{
+			uint16_t altitude : 1;
+			uint16_t start : 1;
+			uint16_t lock : 1;
+			uint16_t danger : 1;
+		}bits;
+	}m_lamps;
+
+	public:
+		/* Naughty, but stops the initialisation sequence warnings for now */
+		motor m_updown_motor_sim;
+		motor m_leftright_motor_sim;
+		motor m_smgp_yaw_sim;
+		motor m_smgp_leftbank_sim;
+		motor m_smgp_rightbank_sim;
+	
 };
 
 

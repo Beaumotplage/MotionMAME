@@ -136,8 +136,8 @@ uint16_t cischeat_state::bigrun_ip_select_r()
 	switch (m_ip_select & 0x3)
 	{
 		case 0 : return ioport("IN6")->read();      // Driving Wheel
-		case 1 : return 0xffff;                 // Cockpit: Up / Down Position
-		case 2 : return 0xffff;                 // Cockpit: Left / Right Position?
+		case 1 : return m_updown_motor_adc;                 // Cockpit: Up / Down Position
+		case 2 : return 0;                 //unused?
 		case 3 : return ioport("PEDAL")->read();    // Accelerator (Pedal)
 		default: return 0xffff;
 	}
@@ -152,16 +152,36 @@ void cischeat_state::unknown_out_w(uint16_t data)
 
 void cischeat_state::motor_out_w(offs_t offset, uint16_t data, uint16_t mem_mask)
 {
-	// motor (seat?)
-	if (ACCESSING_BITS_0_7)
-		m_leds[2] = (data & 0xff) != m_motor_value ? 1 : 0;
+// JB: Took these out for now
+//	if (ACCESSING_BITS_0_7)
+//m_leds[2] = (data & 0xff) != m_motor_value ? 1 : 0;
+
 	m_motor_value = data & 0xff;
+
+	uint16_t motor_speed;
+	if (data & 0x40)
+		motor_speed = -(data & 0xf);
+	else
+		motor_speed = (data & 0xf);
+
+	m_updown_speedcode = motor_speed;
+
 }
 
 
-void cischeat_state::wheel_out_w(uint16_t data)
+void cischeat_state::leftright_motor_out_w(uint16_t data)
 {
-	// motor (wheel?)
+	// Left/Right (Cisco Heat, not Big Run)
+
+	uint16_t motor_speed;
+
+	if (data & 0x40)
+		motor_speed = -(data & 0xf);
+	else
+		motor_speed = (data & 0xf);
+
+	m_leftright_speedcode = -motor_speed;
+
 }
 
 
@@ -202,8 +222,8 @@ uint16_t cischeat_state::cischeat_ip_select_r()
 	switch (m_ip_select & 0x3)
 	{
 		case 0 : return ioport("IN6")->read();  // Driving Wheel
-		case 1 : return ~0;                 // Cockpit: Up / Down Position?
-		case 2 : return ~0;                 // Cockpit: Left / Right Position?
+		case 1: return m_updown_motor_adc;        // Cockpit: Up / Down Position
+		case 2: return m_leftright_motor_adc;     // Cockpit: Left / Right Position?
 		default: return ~0;
 	}
 }

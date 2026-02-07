@@ -5,7 +5,7 @@
     Sega System Hang On hardware
 
 ***************************************************************************/
-
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/mcs51/mcs51.h"
 #include "cpu/z80/z80.h"
@@ -16,7 +16,7 @@
 #include "segaic16_road.h"
 #include "sega16sp.h"
 #include "screen.h"
-
+#include "motorsim.h"
 
 // ======================> segahang_state
 
@@ -43,6 +43,12 @@ public:
 		, m_adc_ports(*this, "ADC%u", 0U)
 		, m_decrypted_opcodes(*this, "decrypted_opcodes")
 		, m_lamps(*this, "lamp%u", 0U)
+		, m_roll_pos_out(*this, "roll")
+		, m_pitch_pos_out(*this, "pitch")
+		, m_scanline_timer(nullptr)
+		, m_updown_motor_sim(61, 192, 4.0f, true)
+		, m_leftright_motor_sim(61, 192, 4.0f, true)
+
 	{ }
 
 	void sound_board_2203(machine_config &config);
@@ -81,6 +87,8 @@ private:
 
 	// PPI read/write callbacks
 	void video_lamps_w(uint8_t data);
+	void drive_board_w(uint8_t data);
+
 	void tilemap_sound_w(uint8_t data);
 	void sub_control_adc_w(uint8_t data);
 	uint8_t adc_status_r();
@@ -139,8 +147,24 @@ private:
 	// internal state
 	emu_timer              * m_i8751_sync_timer = nullptr;
 	uint8_t                  m_adc_select = 0;
-	optional_ioport_array<4> m_adc_ports;
+	optional_ioport_array<7> m_adc_ports;
 	bool                     m_shadow = false;
 	optional_shared_ptr<uint16_t> m_decrypted_opcodes;
 	output_finder<2>         m_lamps;
+	output_finder<>			m_roll_pos_out;
+	output_finder<>			m_pitch_pos_out;
+
+	//Motor simulator
+	int m_motorcode;
+	int m_adc_ud;
+	int m_adc_lr;
+
+	TIMER_CALLBACK_MEMBER(scanline_tick_hangon);
+	emu_timer* m_scanline_timer = nullptr;
+
+	public:
+
+	motor m_updown_motor_sim;
+	motor m_leftright_motor_sim;
+
 };

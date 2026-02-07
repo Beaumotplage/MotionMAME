@@ -1472,29 +1472,64 @@ u16 taitoz_z80_sound_state::dblaxle_steer_input_r(offs_t offset)
 }
 
 // TODO: proper motorcpu hook-up
+/*
+Left Lim 0x283
+Right Lim 0x285
+Centre Horz 0x287
 
-
+Upper Lim  0x289
+Lower Lim 0x28b
+Vert Cent 0x28d
+Motor Pos Horz 0x28F
+Motor Pos Vert 0x291ff
+*/
 u16 chasehq_state::chasehq_motor_r(offs_t offset)
 {
 	switch (offset)
 	{
-		case 0x0:
-			return (machine().rand() &0xff);    /* motor status ?? */
+		/* Test values for self-test screen*/
+		/* Left in for future emu improvements */
+		case (0x281 >> 1):
+			return 0xff;
+		case (0x283>>1):
+			return 0x22;
+		case (0x285 >> 1):
+			return 0xEE;
+		case (0x287 >> 1):
+			return 0x80;
+		case (0x289 >> 1):
+			return 0xee;
+		case (0x28b >> 1):
+			return 0x22;
+		case (0x28d >> 1):
+			return 0x81;
+		case (0x28f >> 1):
+			return m_adc_lr;
+		case (0x291 >> 1):
+			return  m_adc_ud;
 
 		case 0x101:
 			return 0x55;    /* motor cpu status ? */
 
 		default:
-			logerror("CPU #0 PC %06x: warning - read motor cpu %03x\n",m_maincpu->pc(),offset);
+			return m_motorbuffer[offset];
+
 			return 0;
 	}
 }
 
 void chasehq_state::chasehq_motor_w(offs_t offset, u16 data)
 {
+	m_motorbuffer[offset] = data;
 	/* Writes $e00000-25 and $e00200-219 */
 	switch (offset)
 	{
+		case (0x02 >> 1):
+			m_motorcode_v = (int)((char)(data & 0xFF));
+		break;
+		case (0x05 >> 1):
+			m_motorcode_h = (int)((char)(data & 0xFF));
+			break;
 		case 0x0:
 			break;
 
@@ -1503,7 +1538,6 @@ void chasehq_state::chasehq_motor_w(offs_t offset, u16 data)
 			break;
 	}
 
-	logerror("CPU #0 PC %06x: warning - write %04x to motor cpu %03x\n",m_maincpu->pc(),data,offset);
 }
 
 
@@ -1634,6 +1668,16 @@ void chasehq_state::chasehq_map(address_map &map)
 	map(0xc20000, 0xc2000f).rw(m_tc0100scn, FUNC(tc0100scn_device::ctrl_r), FUNC(tc0100scn_device::ctrl_w));
 	map(0xd00000, 0xd007ff).ram().share("spriteram");
 	map(0xe00000, 0xe003ff).rw(FUNC(chasehq_state::chasehq_motor_r), FUNC(chasehq_state::chasehq_motor_w)); /* motor cpu */
+}
+
+//WIP, not emulated yet
+void chasehq_state::chasehq_motor_cpu_map(address_map& map)
+{
+	map(0x000000, 0x07fff).rom();
+	map(0x008000, 0x087ff).ram(); // something to 8700
+	map(0x008800, 0x088ff).ram();
+	map(0x008900, 0x08901).ram();
+	map(0x009000, 0x09003).ram();
 }
 
 void chasehq_state::chasehq_cpub_map(address_map &map)
@@ -3112,6 +3156,9 @@ void taitoz_state::machine_start()
 {
 	save_item(NAME(m_cpua_ctrl));
 	m_cpua_out.resolve();
+	m_scanline_timer = timer_alloc(FUNC(taitoz_state::scanline_tick), this);
+	m_roll_pos.resolve();
+	m_pitch_pos_out.resolve();
 }
 
 void taitoz_z80_sound_state::machine_start()
@@ -3164,6 +3211,13 @@ void spacegun_state::machine_start()
 void taitoz_state::machine_reset()
 {
 	m_cpua_ctrl = 0xff;
+
+	m_scanline_timer->adjust(m_screen->time_until_pos(223), 223);
+	m_updown_motor_sim.reset();
+	m_leftright_motor_sim.reset();
+	m_motorcode_v = 0;
+	m_motorcode_h = 0;
+
 }
 
 void sci_state::machine_reset()
@@ -3172,6 +3226,28 @@ void sci_state::machine_reset()
 
 	m_sci_int6 = 0;
 	m_int6_timer->adjust(attotime::never);
+	
+}
+
+// ------------------------------------------------ -
+//  scanline_tick
+//-------------------------------------------------
+//TODO: make dedicated timer, or see what happens with motor CPU emulated
+TIMER_CALLBACK_MEMBER(taitoz_state::scanline_tick)
+{
+	int scanline = param;
+	int next_scanline = (scanline + 1) % 262;
+
+	if (scanline == 20)
+	{
+		m_adc_ud = m_updown_motor_sim.run_open_loop(128 - (m_motorcode_v*3) ,1);
+		m_adc_lr = m_leftright_motor_sim.run_open_loop(128 - (m_motorcode_h*4),1);
+
+		m_roll_pos = m_adc_lr;
+		m_pitch_pos_out = m_adc_ud;
+
+	}
+	m_scanline_timer->adjust(m_screen->time_until_pos(next_scanline), next_scanline);
 }
 
 void taitoz_state::screen_config(machine_config &config, int vdisp_start, int vdisp_end)
@@ -3254,6 +3330,9 @@ void chasehq_state::chasehq(machine_config &config) //OSC: 26.686, 24.000, 16.00
 	M68000(config, m_subcpu, XTAL(24'000'000)/2);   // MC68000P12 @ 12 MHz
 	m_subcpu->set_addrmap(AS_PROGRAM, &chasehq_state::chasehq_cpub_map);
 	m_subcpu->set_vblank_int("screen", FUNC(chasehq_state::irq4_line_hold));
+
+	Z80(config, m_motorcpu, XTAL(16'000'000) / 4);    // Z0840004PSC @ 4 MHz
+	m_motorcpu->set_addrmap(AS_PROGRAM, &chasehq_state::chasehq_motor_cpu_map);
 
 	TC0040IOC(config, m_tc0040ioc, 0);
 	m_tc0040ioc->read_0_callback().set_ioport("DSWA");

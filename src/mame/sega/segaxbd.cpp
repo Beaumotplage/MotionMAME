@@ -313,7 +313,21 @@ segaxbd_state::segaxbd_state(const machine_config &mconfig, device_type type, co
 	, m_io0_porta(*this, "IO0PORTA")
 	, m_adc_ports(*this, "ADC%u", 0)
 	, m_mux_ports(*this, "MUX%u", 0)
-	, m_lamps(*this, "lamp%u", 0U)
+	, m_lampword_out(*this, "lamps")
+	, m_roll_pos_out(*this, "roll")
+	, m_pitch_pos_out(*this, "pitch")
+	, m_yaw_pos_out(*this, "yaw")
+
+	/* ADC ranges of 86 and 171 for limit switches
+	The game normalises these to 8-bit signed (see test mode)
+	SMGP has left/right ram for seat turn
+	Also has two rear seat ram motors for tilt and lift */
+	, m_updown_motor_sim(86, 171, 1.0f, false)
+	, m_leftright_motor_sim(86, 171, 2.0f, false)
+	, m_smgp_yaw_sim(10, 245, 1.0f, false)
+	, m_smgp_leftbank_sim(10, 245, 1.0f, false)
+	, m_smgp_rightbank_sim(10, 245, 1.0f, false)
+
 {
 	memset(m_adc_reverse, 0, sizeof(m_adc_reverse));
 	palette_init();
@@ -325,10 +339,13 @@ void segaxbd_state::device_start()
 	if(!m_segaic16road->started())
 		throw device_missing_dependencies();
 
-	m_lamps.resolve();
+	m_lampword_out.resolve();
+	m_roll_pos_out.resolve();
+	m_pitch_pos_out.resolve();
+	m_yaw_pos_out.resolve();
 
 	video_start();
-
+	
 	// allocate a scanline timer
 	m_scanline_timer = timer_alloc(FUNC(segaxbd_state::scanline_tick), this);
 
@@ -374,6 +391,23 @@ public:
 	void init_smgp();
 	void init_gprider();
 
+
+	int limit_left_r()
+	{
+		return m_mainpcb->m_leftright_motor_sim.getLowerLimit();
+	}
+	int limit_down_r()
+	{
+		return m_mainpcb->m_updown_motor_sim.getLowerLimit();
+	}
+	int limit_right_r()
+	{
+		return m_mainpcb->m_leftright_motor_sim.getUpperLimit();
+	}
+	int limit_up_r()
+	{
+		return m_mainpcb->m_updown_motor_sim.getUpperLimit();
+	}
 protected:
 	required_device<segaxbd_state> m_mainpcb;
 };
@@ -480,6 +514,12 @@ uint8_t segaxbd_state::analog_r()
 	// reverse some port values
 	if (m_adc_reverse[which])
 		value = 255 - value;
+
+	if (which == 3)
+		value = m_adc_ud; //todo: getter, not global?
+
+	if (which == 4)
+		value = m_adc_lr;
 
 	// return the previously latched value
 	return value;
@@ -616,6 +656,42 @@ TIMER_CALLBACK_MEMBER(segaxbd_state::scanline_tick)
 		m_vblank_irq_state = 0;
 		m_subcpu->set_input_line(4, CLEAR_LINE);
 		update_main_irqs();
+
+
+		if (m_smgp)
+		{
+			m_yaw_pos_out = m_smgp_yaw_sim.run_open_loop(m_smgp_yaw_tgt,7 );
+
+			int leftram = m_smgp_leftbank_sim.run_open_loop(m_smgp_left_tgt, m_smgp_left_spd);
+			int rightram = m_smgp_rightbank_sim.run_open_loop(m_smgp_right_tgt, m_smgp_right_spd);
+		
+			m_roll_pos_out = 128 - ((leftram - rightram) / 2);// +/-128 range
+			m_pitch_pos_out = ((leftram + rightram) / 2);
+
+		}
+		else
+		{
+			bool brake = false;
+			if ((m_motorcode & 0xf0) == 0)
+				brake = true;
+
+			//Pitch simulator
+			m_adc_ud = m_updown_motor_sim.run((m_motorcode >> 4) -8, brake);
+
+			//Roll Simulator
+			brake = false;
+			if ((m_motorcode & 0xf) == 0)
+				brake = true;
+
+			m_adc_lr = m_leftright_motor_sim.run((m_motorcode & 0xf) -8, brake);
+
+			// Scale it for real world as ADC numbers are a bit small
+			// Inverting left/right too, to match real machine movement
+			m_pitch_pos_out = (int)(128.0f + (2.0f * (float)(m_adc_ud - 128)));
+			m_roll_pos_out = (int)(128.0f - (2.0f * (float)(m_adc_lr - 128)));
+
+		}
+		m_lampword_out = m_lamps.word;
 	}
 
 	m_scanline_timer->adjust(m_screen->time_until_pos(next_scanline), next_scanline);
@@ -649,10 +725,17 @@ void segaxbd_state::generic_iochip0_lamps_w(uint8_t data)
 	// d6: danger lamp
 	// in clone aburner, lamps work only in testmode?
 
+	m_lamps.bits.altitude = BIT(data, 1);
+	m_lamps.bits.start = BIT(data, 2);
+	m_lamps.bits.lock = BIT(data, 5);
+	m_lamps.bits.danger = BIT(data, 6);
+
+	/*
 	m_lamps[0] = BIT(data, 5);
 	m_lamps[1] = BIT(data, 6);
 	m_lamps[2] = BIT(data, 1);
 	m_lamps[3] = BIT(data, 2);
+	*/
 }
 
 
@@ -663,10 +746,9 @@ void segaxbd_state::generic_iochip0_lamps_w(uint8_t data)
 
 uint8_t segaxbd_state::aburner2_motor_r()
 {
-	uint8_t data = m_io0_porta->read() & 0xc0;
+	uint8_t data = m_io0_porta->read();
 
-	// TODO
-	return data | 0x3f;
+	return data;
 }
 
 
@@ -677,7 +759,7 @@ uint8_t segaxbd_state::aburner2_motor_r()
 
 void segaxbd_state::aburner2_motor_w(uint8_t data)
 {
-	// TODO
+	m_motorcode = data;
 }
 
 
@@ -702,7 +784,142 @@ uint8_t segaxbd_state::smgp_motor_r()
 
 void segaxbd_state::smgp_motor_w(uint8_t data)
 {
+	//TODO - do adjust speeds - should rams always discharge to neutral position at slower rate?
+
+	m_smgp = true; //TODO - move me to init somewhere
 	// TODO
+	#define maxval 245
+	#define minval 10
+	#define centreval 128
+	#define lowspeed 3
+	#define highspeed 7
+
+
+	bool on = false;
+
+	if (data & 0x10)
+		on = true;
+
+	
+	switch (data & 0x0f)
+	{
+		case 0: // Steering 'Handle' Reverse
+		{
+
+		}break;
+		case 1: // Steering 'Handle' Forward
+		{
+
+		}break;
+		case 2: // Seat Left Turn
+		{
+
+			if (on)
+				m_smgp_yaw_tgt = minval;
+			else
+				m_smgp_yaw_tgt = centreval;
+		
+		}break;
+		case 3: // Seat Right Turn
+		{
+			if (on)
+				m_smgp_yaw_tgt = maxval;
+			else
+				m_smgp_yaw_tgt = centreval;
+		}break;
+		case 4: //Seat Right Bank Slow
+		{
+			m_smgp_right_spd = lowspeed;
+
+			if (on)
+			{
+				m_smgp_right_tgt = maxval;
+			}
+			else
+			{
+				m_smgp_right_tgt = centreval;
+			}
+
+
+		}break;
+		case 5: //Seat Left Bank Slow
+		{
+			m_smgp_left_spd = lowspeed;
+
+			if (on)
+			{
+				m_smgp_left_tgt = maxval;
+			}
+			else
+			{
+				m_smgp_left_tgt = centreval;
+			}
+
+		}break; 
+		case 6: //Seat LIFT slow
+		{
+			m_smgp_left_spd = lowspeed;
+			m_smgp_right_spd = lowspeed;
+
+			if (on)
+			{
+				m_smgp_left_tgt = maxval;
+				m_smgp_right_tgt = maxval;
+			}
+			else
+			{
+				m_smgp_left_tgt = centreval;
+				m_smgp_right_tgt = centreval;
+			}
+		}break;
+		case 7: //Seat Right bank fast
+		{
+			m_smgp_right_spd = highspeed;
+
+			if (on)
+			{
+				m_smgp_right_tgt = maxval;
+			}
+			else
+			{
+				m_smgp_right_tgt = centreval;
+			}
+
+		}break;
+		case 8: //Seat Left bank fast
+		{
+			m_smgp_left_spd = highspeed;
+
+			if (on)
+			{
+				m_smgp_left_tgt = maxval;
+			}
+			else
+			{
+				m_smgp_left_tgt = centreval;
+			}
+		}break;
+		case 9: //Seat LIFT fast
+		{
+			m_smgp_left_spd = highspeed;
+			m_smgp_right_spd = highspeed;
+
+			if (on)
+			{
+				m_smgp_left_tgt = maxval;
+				m_smgp_right_tgt = maxval;
+			}
+			else
+			{
+				m_smgp_left_tgt = centreval;
+				m_smgp_right_tgt = centreval;
+			}
+		}break;
+		default:
+		{
+		}break;
+	}
+
 }
 
 
@@ -1085,13 +1302,17 @@ void segaxbd_rascot_state::comm_map(address_map &map)
 
 static INPUT_PORTS_START( xboard_generic )
 	PORT_START("mainpcb:IO0PORTA")
-	PORT_BIT( 0x3f, IP_ACTIVE_LOW, IPT_UNKNOWN )    // D5-D0: CN C pin 24-19 (switch state 0= open, 1= closed)
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_MEMBER(FUNC(segaxbd_new_state::limit_up_r))
+	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_MEMBER(FUNC(segaxbd_new_state::limit_down_r))
+	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_MEMBER(FUNC(segaxbd_new_state::limit_right_r))
+	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_MEMBER(FUNC(segaxbd_new_state::limit_left_r))
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("mainpcb:adc", FUNC(adc0804_device::intr_r))
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )     // D7: (Not connected)
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNUSED )     // D7: (Not connected) // JB: was low
 
 	// I/O port: CN C pins 17,15,13,11,9,7,5,3
 	PORT_START("mainpcb:IO0PORTB")
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0xFF, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	
 
 	// Input port: switches, CN D pin A1-8 (switch state 1= open, 0= closed)
 	PORT_START("mainpcb:IO1PORTA")
@@ -1172,10 +1393,11 @@ static INPUT_PORTS_START( aburner )
 	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_Z ) PORT_SENSITIVITY(100) PORT_KEYDELTA(79)
 
 	PORT_START("mainpcb:ADC3")  // motor Y
-	PORT_BIT( 0xff, (0xb0+0x50)/2, IPT_CUSTOM )
+	PORT_BIT(0xff, ((0xb0 + 0x50) / 2), IPT_POSITIONAL_V) PORT_SENSITIVITY(100) PORT_KEYDELTA(4)
 
 	PORT_START("mainpcb:ADC4")  // motor X
-	PORT_BIT( 0xff, (0xb0+0x50)/2, IPT_CUSTOM )
+	PORT_BIT(0xff, ((0xb0 + 0x50) / 2), IPT_POSITIONAL) PORT_SENSITIVITY(100) PORT_KEYDELTA(4)
+
 INPUT_PORTS_END
 
 
@@ -1764,6 +1986,18 @@ void segaxbd_state::xboard_base_mconfig(machine_config &config)
 	pcm.set_bank(segapcm_device::BANK_512);
 	pcm.add_route(0, "speaker", 0.35, 0);
 	pcm.add_route(1, "speaker", 0.35, 1);
+	m_updown_motor_sim.reset();
+	m_leftright_motor_sim.reset();
+	m_smgp_yaw_sim.reset();
+	m_smgp_rightbank_sim.reset();
+	m_smgp_leftbank_sim.reset();
+	m_smgp_left_spd = 0;    //todo: put these in the motorsim class
+	m_smgp_right_spd = 0;
+	m_smgp_left_tgt = 0x80;
+	m_smgp_right_tgt = 0x80;
+	m_smgp_yaw_tgt = 0x80;
+	m_smgp = 0;
+
 }
 
 

@@ -16,6 +16,7 @@
 #include "ms1_tmap.h"
 #include "emupal.h"
 #include "screen.h"
+#include "..\sega\motorsim.h"
 
 class cischeat_state : public driver_device
 {
@@ -42,6 +43,10 @@ public:
 		, m_soundlatch2(*this, "soundlatch2")
 		, m_gatearray(*this, "gatearray")
 		, m_leds(*this, "led%u", 0U)
+		, m_roll_pos_out(*this, "roll")
+		, m_pitch_pos_out(*this, "pitch")
+		, m_cisco_updown_motor_sim(86, 171, 4.0f, false)
+		, m_cisco_leftright_motor_sim(86, 171, 4.0f, false)
 	{}
 
 	void scudhamm_motor_command_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
@@ -56,7 +61,7 @@ public:
 	void leds_out_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
 	void unknown_out_w(uint16_t data);
 	void motor_out_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
-	void wheel_out_w(uint16_t data);
+	void leftright_motor_out_w(uint16_t data);
 	void ip_select_w(uint16_t data);
 	void ip_select_plus1_w(uint16_t data);
 	void bigrun_comms_w(uint16_t data);
@@ -120,7 +125,10 @@ public:
 protected:
 	virtual void machine_start() override
 	{
-		m_leds.resolve(); m_scudhamm_motor_command = 0;
+		m_leds.resolve();
+		m_roll_pos_out.resolve();
+		m_pitch_pos_out.resolve();
+		m_scudhamm_motor_command = 0;
 	}
 
 	virtual void video_start() override ATTR_COLD;
@@ -146,6 +154,11 @@ protected:
 	uint8_t m_motor_value = 0U;
 	uint8_t m_io_value = 0U;
 
+	uint16_t m_updown_motor_adc = 0x80;
+	int16_t m_updown_speedcode = 0;
+	uint16_t m_leftright_motor_adc = 0x80;
+	int16_t m_leftright_speedcode = 0;
+
 	// TODO: make these to have a more meaningful name
 	optional_device<cpu_device> m_maincpu;
 	optional_device<cpu_device> m_cpu1;
@@ -163,6 +176,11 @@ protected:
 	optional_device<generic_latch_16_device> m_soundlatch2;
 	optional_device<megasys1_gatearray_device> m_gatearray;
 	output_finder<5> m_leds;
+	output_finder<> m_roll_pos_out;
+	output_finder<> m_pitch_pos_out;
+
+	motor m_cisco_updown_motor_sim;
+	motor m_cisco_leftright_motor_sim;
 };
 
 class armchamp2_state : public cischeat_state

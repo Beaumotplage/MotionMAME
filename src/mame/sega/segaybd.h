@@ -16,7 +16,7 @@
 #include "segaic16.h"
 #include "sega16sp.h"
 #include "screen.h"
-
+#include "motorsim.h"
 
 // ======================> segaybd_state
 
@@ -38,12 +38,6 @@ public:
 		, m_segaic16vid(*this, "segaic16vid")
 		, m_adc_ports(*this, "ADC.%u", 0)
 		, m_start_lamp(*this, "start_lamp")
-		, m_right_motor_position(*this, "right_motor_position")
-		, m_right_motor_position_nor(*this, "right_motor_position_nor")
-		, m_right_motor_speed(*this, "right_motor_speed")
-		, m_left_motor_position(*this, "left_motor_position")
-		, m_left_motor_position_nor(*this, "left_motor_position_nor")
-		, m_left_motor_speed(*this, "left_motor_speed")
 		, m_danger_lamp(*this, "danger_lamp")
 		, m_crash_lamp(*this, "crash_lamp")
 		, m_emergency_stop_lamp(*this, "emergency_stop_lamp")
@@ -54,12 +48,20 @@ public:
 		, m_left_start_lamp(*this, "left_start_lamp")
 		, m_right_start_lamp(*this, "right_start_lamp")
 		, m_gun_recoil(*this, "P%u_Gun_Recoil", 1U)
+		, m_roll_pos_out(*this, "roll")
+		, m_pitch_pos_out(*this, "pitch")
+		, m_yaw_pos_out(*this, "yaw")
+		, m_lampword_out(*this, "lamps")
+
 	{
 	}
 
 	void yboard_deluxe(machine_config &config);
 	void yboard_link(machine_config &config);
 	void yboard(machine_config &config);
+	void yboard_gloc(machine_config& config);
+	void yboard_generic(machine_config& config);
+	void yboard_pdrift(machine_config& config);
 
 	// game-specific driver init
 	void init_generic();
@@ -91,6 +93,9 @@ private:
 
 	// input helpers
 	ioport_value analog_mux();
+	ioport_value adc0();
+	ioport_value adc1();
+	ioport_value adc2_pdrift();
 
 	// game-specific output handlers
 	void gforce2_output_cb1(uint16_t data);
@@ -139,12 +144,6 @@ private:
 
 	// outputs
 	output_finder<> m_start_lamp;
-	output_finder<> m_right_motor_position;
-	output_finder<> m_right_motor_position_nor;
-	output_finder<> m_right_motor_speed;
-	output_finder<> m_left_motor_position;
-	output_finder<> m_left_motor_position_nor;
-	output_finder<> m_left_motor_speed;
 	output_finder<> m_danger_lamp;
 	output_finder<> m_crash_lamp;
 	output_finder<> m_emergency_stop_lamp;
@@ -155,6 +154,10 @@ private:
 	output_finder<> m_left_start_lamp;
 	output_finder<> m_right_start_lamp;
 	output_finder<2> m_gun_recoil;
+	output_finder<> m_roll_pos_out;
+	output_finder<> m_pitch_pos_out;
+	output_finder<> m_yaw_pos_out;
+	output_finder<> m_lampword_out;
 
 	// configuration
 	output_delegate m_output_cb1;
@@ -167,6 +170,40 @@ private:
 	uint8_t m_timer_irq_state = 0;
 	uint8_t m_vblank_irq_state = 0;
 	uint8_t m_misc_io_data = 0;
+
+	union {
+		uint16_t word;
+		struct
+		{
+			uint16_t start : 1;
+			uint16_t danger : 1;
+			uint16_t crash : 1;
+			uint16_t emergency : 1;
+		}bits;
+
+	}m_lamps;
+
+	//-------------------------------------------------
+	//  r360_output_cb2 - output #2 handler for
+	//  G-Loc R360
+	//-------------------------------------------------
+
+	bool m_gforce = 0; // game specific code
+	int m_gforce_adc_turntable = 0x00;
+	int m_gforce_adc_bank = 0x00;
+	
+	int m_gforce_turnspeed = 0;
+	int m_gforce_bankspeed = 0;
+
+	int m_gloc_right_motor_pos_target;
+	int m_gloc_right_motor_speed;
+	int m_gloc_left_motor_pos_target;
+	int m_gloc_left_motor_speed;
+	int m_gloc_left_pos = 0x80;
+	int m_gloc_right_pos = 0x80;
+
 };
+
+
 
 #endif // MAME_SEGA_SEGAYBD_H

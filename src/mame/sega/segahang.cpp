@@ -87,6 +87,10 @@ void segahang_state::video_lamps_w(uint8_t data)
 	machine().bookkeeping().coin_counter_w(0, data & 0x01);
 }
 
+void segahang_state::drive_board_w(uint8_t data)
+{
+    m_motorcode = data;
+}
 
 //-------------------------------------------------
 //  tilemap_sound_w - handshaking bits, plus
@@ -142,7 +146,7 @@ void segahang_state::sub_control_adc_w(uint8_t data)
 	m_subcpu->set_input_line(INPUT_LINE_RESET, (data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
 
 	// bits 2 & 3: ADC select
-	m_adc_select = (data >> 2) & 3;
+	m_adc_select = (data >> 2) & 7;
 }
 
 
@@ -158,7 +162,21 @@ uint8_t segahang_state::adc_status_r()
 	// D5 = 0 (left open)
 	// D4 = 0 (left open)
 	//
-	return m_adc->intr_r() << 6;
+	uint8_t result = 0;
+
+	result |= m_updown_motor_sim.getLowerLimit() << 0; // Up  limit
+	result |= m_updown_motor_sim.getCentre() << 1; 
+	result |= m_updown_motor_sim.getUpperLimit() << 2; // Down limit
+	result |= m_leftright_motor_sim.getLowerLimit() << 3; //Left limit
+	result |= m_leftright_motor_sim.getCentre() << 4;
+	result |= m_leftright_motor_sim.getUpperLimit() << 5; //right limit
+
+
+	result ^= 0x3F;
+
+	result |= m_adc->intr_r() << 6;
+
+	return result;
 }
 
 
@@ -209,23 +227,16 @@ void segahang_state::sync_ppi_w(offs_t offset, uint8_t data)
 
 uint8_t segahang_state::analog_r()
 {
-	return m_adc_ports[m_adc_select].read_safe(0);
+	uint8_t value = m_adc_ports[m_adc_select].read_safe(0x0);
+
+
+	if (m_adc_select == 4) // Left/Right Bank
+		value = m_adc_lr;
+	if (m_adc_select == 5) // Up/Down Bank
+		value = m_adc_ud;
+
+	return value;
 }
-
-
-#if 0
-TIMER_DEVICE_CALLBACK_MEMBER(segahang_state::hangon_irq)
-{
-	int scanline = param;
-
-	// according to the schematics, IRQ2 is generated every 16 scanlines
-	if((scanline % 16) == 0)
-		m_maincpu->set_input_line(2, HOLD_LINE);
-
-	if(scanline == 240)
-		m_maincpu->set_input_line(4, HOLD_LINE);
-}
-#endif
 
 
 
@@ -305,8 +316,15 @@ void segahang_state::i8751_p1_w(uint8_t data)
 void segahang_state::machine_start()
 {
 	m_lamps.resolve();
+	m_roll_pos_out.resolve();
+	m_pitch_pos_out.resolve();
 
+	m_updown_motor_sim.reset();
+	m_leftright_motor_sim.reset();
 	m_i8751_sync_timer = timer_alloc(FUNC(segahang_state::i8751_sync), this);
+
+	// allocate a scanline timer
+	m_scanline_timer = timer_alloc(FUNC(segahang_state::scanline_tick_hangon), this);
 }
 
 
@@ -324,6 +342,9 @@ void segahang_state::machine_reset()
 
 	// reset global state
 	m_adc_select = 0;
+
+	// TODO: make timers for motor control dedicated timers
+	m_scanline_timer->adjust(m_screen->time_until_pos(0), 0);
 }
 
 
@@ -341,6 +362,34 @@ TIMER_CALLBACK_MEMBER(segahang_state::ppi_sync)
 {
 	// synchronize writes to the 8255 PPI
 	m_i8255[0]->write(param >> 8, param & 0xff);
+}
+
+TIMER_CALLBACK_MEMBER(segahang_state::scanline_tick_hangon)
+{
+	int scanline = param;
+	int next_scanline = (scanline + 1) % 262;
+
+	if (scanline == 224)
+	{
+		bool brake = false;
+		if ((m_motorcode & 0xf) == 0 )
+			brake = true;
+
+		m_adc_lr = m_leftright_motor_sim.run((m_motorcode & 0xf) - 8, brake);
+
+		brake = false;
+		if ((m_motorcode  & 0xf0) == 0)
+			brake = true;
+
+		m_adc_ud = m_updown_motor_sim.run((m_motorcode >> 4) - 8, brake);
+
+		m_pitch_pos_out = m_adc_ud;
+		m_roll_pos_out = m_adc_lr;
+
+	}
+
+	//POST: Right, left, back, forwards
+	m_scanline_timer->adjust(m_screen->time_until_pos(next_scanline), next_scanline);
 }
 
 
@@ -742,8 +791,10 @@ void segahang_state::shared_base(machine_config &config)
 	m_i8255[0]->out_pb_callback().set(FUNC(segahang_state::video_lamps_w));
 	m_i8255[0]->out_pc_callback().set(FUNC(segahang_state::tilemap_sound_w));
 
+	//TODO: This isn't shared, is it? Space Harrier has more stuff.
 	I8255(config, m_i8255[1]);
 	m_i8255[1]->out_pa_callback().set(FUNC(segahang_state::sub_control_adc_w));
+	m_i8255[1]->out_pb_callback().set(FUNC(segahang_state::drive_board_w));
 	m_i8255[1]->in_pc_callback().set(FUNC(segahang_state::adc_status_r));
 
 	for (int i = 0; i < 2; i++)

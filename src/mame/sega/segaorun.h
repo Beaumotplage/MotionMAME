@@ -18,7 +18,7 @@
 #include "segaic16_road.h"
 #include "sega16sp.h"
 #include "screen.h"
-
+#include "motorsim.h"
 
 // ======================> segaorun_state
 
@@ -43,11 +43,11 @@ public:
 		m_bankmotor_timer(*this, "bankmotor"),
 		m_digital_ports(*this, { { "SERVICE", "UNKNOWN", "COINAGE", "DSW" } }),
 		m_adc_ports(*this, "ADC.%u", 0),
-		m_bank_motor_direction(*this, "Bank_Motor_Direction"),
-		m_bank_motor_speed(*this, "Bank_Motor_Speed"),
 		m_vibration_motor(*this, "Vibration_motor"),
-		m_start_lamp(*this, "Start_lamp"),
-		m_brake_lamp(*this, "Brake_lamp"),
+	//	m_start_lamp(*this, "Start_lamp"),
+	//	m_brake_lamp(*this, "Brake_lamp"),
+		m_lampword_out(*this,"lamps"),
+		m_roll_pos(*this, "roll"),
 		m_workram(*this, "workram"),
 		m_custom_io_r(*this),
 		m_custom_io_w(*this),
@@ -58,8 +58,7 @@ public:
 		m_irq2_state(0),
 		m_adc_select(0),
 		m_vblank_irq_state(0),
-		m_bankmotor_pos(0x8000),
-		m_bankmotor_delta(0)
+		m_leftright_motor_sim(36, 220, 1.25f, false)
 	{ }
 
 	void shangon_fd1089b(machine_config &config);
@@ -153,11 +152,9 @@ protected:
 	optional_ioport_array<8> m_adc_ports;
 
 	// outputs
-	output_finder<> m_bank_motor_direction;
-	output_finder<> m_bank_motor_speed;
 	output_finder<> m_vibration_motor;
-	output_finder<> m_start_lamp;
-	output_finder<> m_brake_lamp;
+	output_finder<> m_lampword_out;
+	output_finder<> m_roll_pos;
 
 	// memory
 	required_shared_ptr<uint16_t> m_workram;
@@ -174,6 +171,21 @@ protected:
 	uint8_t             m_irq2_state;
 	uint8_t             m_adc_select;
 	uint8_t             m_vblank_irq_state;
-	int                 m_bankmotor_pos;
-	int                 m_bankmotor_delta;
+	
+	int m_motorcode;
+	int m_adc_lr;
+
+	union {
+		uint16_t word;
+		struct
+		{
+			uint16_t start : 1;
+			uint16_t brake : 1;
+		}bits;
+
+	}m_lamps;
+
+	public:
+		motor m_leftright_motor_sim;
+
 };

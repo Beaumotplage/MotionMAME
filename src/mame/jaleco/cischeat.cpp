@@ -226,7 +226,7 @@ void cischeat_state::bigrun_map(address_map &map)
 	map(0x080000, 0x080001).portr("IN1").w(FUNC(cischeat_state::leds_out_w));       // Coins
 	map(0x080002, 0x080003).portr("IN2").w(FUNC(cischeat_state::unknown_out_w));    // Buttons
 	map(0x080004, 0x080005).portr("IN3").w(FUNC(cischeat_state::motor_out_w));      // Motor Limit Switches
-	map(0x080006, 0x080007).portr("IN4").w(FUNC(cischeat_state::wheel_out_w));      // DSW 1 & 2
+	map(0x080006, 0x080007).portr("IN4").w(FUNC(cischeat_state::leftright_motor_out_w));      // DSW 1 & 2
 	map(0x080008, 0x080009).r(m_soundlatch2, FUNC(generic_latch_16_device::read));  // From sound cpu
 	map(0x08000a, 0x08000b).w(m_soundlatch, FUNC(generic_latch_16_device::write));  // To sound cpu
 	map(0x08000c, 0x08000d).nopw();            // ??
@@ -281,7 +281,7 @@ void cischeat_state::cischeat_map(address_map &map)
 	map(0x080000, 0x080001).portr("IN1").w(FUNC(cischeat_state::leds_out_w));       // Coins
 	map(0x080002, 0x080003).portr("IN2").w(FUNC(cischeat_state::unknown_out_w));    // Buttons
 	map(0x080004, 0x080005).portr("IN3").w(FUNC(cischeat_state::motor_out_w));      // Motor Limit Switches
-	map(0x080006, 0x080007).portr("IN4").w(FUNC(cischeat_state::wheel_out_w));      // DSW 1 & 2
+	map(0x080006, 0x080007).portr("IN4").w(FUNC(cischeat_state::leftright_motor_out_w));      // DSW 1 & 2
 	map(0x08000a, 0x08000b).w(m_soundlatch, FUNC(generic_latch_16_device::write));  // To sound cpu
 	map(0x08000c, 0x08000d).nopw();            // ??
 	map(0x080010, 0x080011).rw(FUNC(cischeat_state::cischeat_ip_select_r), FUNC(cischeat_state::ip_select_w));
@@ -2062,9 +2062,19 @@ TIMER_DEVICE_CALLBACK_MEMBER(cischeat_state::bigrun_scanline)
 
 	if(scanline == 240) // vblank-out irq
 		m_cpu1->set_input_line(4, HOLD_LINE);
-
-	if(scanline == 0)
+		
+	if (scanline == 0)
+	{
 		m_cpu1->set_input_line(2, HOLD_LINE);
+
+		m_updown_motor_adc = m_cisco_updown_motor_sim.run(m_updown_speedcode, false);
+		m_leftright_motor_adc = m_cisco_leftright_motor_sim.run(m_leftright_speedcode, false);
+
+		// The game hardly seems to move the pots, so scaling it up a bit for now
+		m_pitch_pos_out = (int)(128.0f - (6.0f * (float)(m_updown_motor_adc - 128)));
+		m_roll_pos_out = (int)(128.0f - (2.0f * (float)(m_leftright_motor_adc - 128)));
+
+	}
 }
 
 void cischeat_state::sound_irq(int state)
@@ -2134,6 +2144,10 @@ void cischeat_state::bigrun(machine_config &config)
 	OKIM6295(config, m_oki2, 4000000, okim6295_device::PIN7_HIGH); // clock frequency & pin 7 not verified
 	m_oki2->add_route(ALL_OUTPUTS, "speaker", 0.25, 0);
 	m_oki2->add_route(ALL_OUTPUTS, "speaker", 0.25, 1);
+
+	m_cisco_updown_motor_sim.reset();
+	m_cisco_leftright_motor_sim.reset();
+
 }
 
 void cischeat_state::bigrun_d65006(machine_config &config)

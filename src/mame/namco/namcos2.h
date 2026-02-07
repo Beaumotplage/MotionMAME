@@ -26,7 +26,7 @@
 #include "namcos2_sprite.h"
 #include "namcos2_roz.h"
 #include "screen.h"
-
+#include "..\sega\motorsim.h"
 /*********************************************/
 /* IF GAME SPECIFIC HACKS ARE REQUIRED THEN  */
 /* USE THE m_gametype MEMBER TO FIND         */
@@ -60,7 +60,12 @@ public:
 		m_spriteram(*this, "spriteram"),
 		m_c45_road(*this, "c45_road"),
 		m_ns2sprite(*this, "s2sprite"),
-		m_ns2roz(*this, "s2roz")
+		m_ns2roz(*this, "s2roz"),
+		m_roll_pos_out(*this, "roll"),
+		m_pitch_pos_out(*this, "pitch"),
+		m_updown_motor_sim(10, 245, 2.0f, false),
+		m_leftright_motor_sim(10, 245, 2.0f, false)
+		
 	{ }
 
 	void configure_c116_standard(machine_config &config);
@@ -232,6 +237,7 @@ enum
 	u16 m_gfx_ctrl = 0;
 	u8 m_finallap_prot_count = 0;
 	bool m_sendval = false;
+	unsigned char m_motorcode;
 
 	optional_device<namco_c45_road_device> m_c45_road;
 	optional_device<namcos2_sprite_device> m_ns2sprite;
@@ -241,6 +247,9 @@ enum
 	void namcos2_68k_key_w(offs_t offset, u16 data);
 	u16 namcos2_finallap_prot_r(offs_t offset); // finalap2, finalap3
 	u16 finalap3bl_prot_r(); // finalap3bl
+
+	output_finder<>			m_roll_pos_out;
+	output_finder<>			m_pitch_pos_out;
 
 	void TilemapCB(u16 code, int &tile, int &mask);
 	void TilemapCB_finalap2(u16 code, int &tile, int &mask);
@@ -272,6 +281,10 @@ enum
 	void slave_metlhawk_am(address_map &map) ATTR_COLD;
 	void slave_sgunner_am(address_map &map) ATTR_COLD;
 	void sound_default_am(address_map &map) ATTR_COLD;
+public:
+	motor m_updown_motor_sim;
+	motor m_leftright_motor_sim;
+
 };
 
 class gollygho_state : public namcos2_state
