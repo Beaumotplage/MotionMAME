@@ -12,7 +12,7 @@
 #include "emupal.h"
 #include "screen.h"
 #include "tilemap.h"
-#include "..\sega\motorsim.h"
+#include "machine/motorsim.h"
 
 class wecleman_state : public driver_device
 {
@@ -37,7 +37,7 @@ public:
 		, m_gfxdecode(*this, "gfxdecode")
 		, m_palette(*this, "palette")
 		, m_screen(*this, "screen")
-		, m_led(*this, "led%u", 0U)
+		, m_lampword_out(*this, "lamps")
 		, m_yaw_pos_out(*this, "yaw")
 		, m_motorcode_out(*this, "motorcode")
 		, m_rotate_motor_sim(61, 192, 2.0f, true)
@@ -131,7 +131,7 @@ protected:
 	required_device<palette_device> m_palette;
 	required_device<screen_device> m_screen;
 
-	output_finder<1> m_led;
+	output_finder<> m_lampword_out;
 	output_finder<> m_yaw_pos_out;
 	output_finder<> m_motorcode_out;
 
@@ -167,6 +167,8 @@ protected:
 
 	int m_motorcode;
 	uint8_t m_motor_pos;
+
+	lamps_t m_lamps;
 
 public:
 	motor m_rotate_motor_sim;

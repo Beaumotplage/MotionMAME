@@ -725,10 +725,10 @@ void segaxbd_state::generic_iochip0_lamps_w(uint8_t data)
 	// d6: danger lamp
 	// in clone aburner, lamps work only in testmode?
 
-	m_lamps.bits.altitude = BIT(data, 1);
-	m_lamps.bits.start = BIT(data, 2);
-	m_lamps.bits.lock = BIT(data, 5);
-	m_lamps.bits.danger = BIT(data, 6);
+	m_lamps.x_board.altitude = BIT(data, 1);
+	m_lamps.x_board.start = BIT(data, 2);
+	m_lamps.x_board.lock = BIT(data, 5);
+	m_lamps.x_board.danger = BIT(data, 6);
 
 	/*
 	m_lamps[0] = BIT(data, 5);

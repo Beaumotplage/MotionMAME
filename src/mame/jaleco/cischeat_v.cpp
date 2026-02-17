@@ -152,9 +152,6 @@ void cischeat_state::unknown_out_w(uint16_t data)
 
 void cischeat_state::motor_out_w(offs_t offset, uint16_t data, uint16_t mem_mask)
 {
-// JB: Took these out for now
-//	if (ACCESSING_BITS_0_7)
-//m_leds[2] = (data & 0xff) != m_motor_value ? 1 : 0;
 
 	m_motor_value = data & 0xff;
 

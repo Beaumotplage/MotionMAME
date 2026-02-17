@@ -18,7 +18,7 @@
 #include "segaic16_road.h"
 #include "sega16sp.h"
 #include "screen.h"
-#include "motorsim.h"
+#include "machine/motorsim.h"
 
 // ======================> segaorun_state
 
@@ -175,15 +175,7 @@ protected:
 	int m_motorcode;
 	int m_adc_lr;
 
-	union {
-		uint16_t word;
-		struct
-		{
-			uint16_t start : 1;
-			uint16_t brake : 1;
-		}bits;
-
-	}m_lamps;
+	lamps_t m_lamps;
 
 	public:
 		motor m_leftright_motor_sim;

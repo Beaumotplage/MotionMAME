@@ -16,7 +16,7 @@
 #include "ms1_tmap.h"
 #include "emupal.h"
 #include "screen.h"
-#include "..\sega\motorsim.h"
+#include "machine/motorsim.h"
 
 class cischeat_state : public driver_device
 {
@@ -43,6 +43,7 @@ public:
 		, m_soundlatch2(*this, "soundlatch2")
 		, m_gatearray(*this, "gatearray")
 		, m_leds(*this, "led%u", 0U)
+		, m_lampword_out(*this, "lamps")
 		, m_roll_pos_out(*this, "roll")
 		, m_pitch_pos_out(*this, "pitch")
 		, m_cisco_updown_motor_sim(86, 171, 4.0f, false)
@@ -126,6 +127,7 @@ protected:
 	virtual void machine_start() override
 	{
 		m_leds.resolve();
+		m_lampword_out.resolve();
 		m_roll_pos_out.resolve();
 		m_pitch_pos_out.resolve();
 		m_scudhamm_motor_command = 0;
@@ -176,11 +178,15 @@ protected:
 	optional_device<generic_latch_16_device> m_soundlatch2;
 	optional_device<megasys1_gatearray_device> m_gatearray;
 	output_finder<5> m_leds;
+	output_finder<> m_lampword_out;
 	output_finder<> m_roll_pos_out;
 	output_finder<> m_pitch_pos_out;
 
+
 	motor m_cisco_updown_motor_sim;
 	motor m_cisco_leftright_motor_sim;
+
+	lamps_t m_lamps;
 };
 
 class armchamp2_state : public cischeat_state

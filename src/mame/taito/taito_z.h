@@ -19,7 +19,7 @@
 #include "tc0150rod.h"
 #include "tc0480scp.h"
 #include "screen.h"
-#include "..\sega\motorsim.h"
+#include "machine/motorsim.h"
 
 class taitoz_state : public driver_device
 {
@@ -47,10 +47,12 @@ public:
 		m_stickx(*this, "STICKX"),
 		m_sticky(*this, "STICKY"),
 		m_cpua_out(*this, "genout%u", 0U),
+		m_lampword_out(*this, "lamps"),
 		m_roll_pos(*this, "roll"),
 		m_pitch_pos_out(*this, "pitch"),
 		m_updown_motor_sim(86, 171, 1.0f, false),
 		m_leftright_motor_sim(86, 171, 2.0f, false)
+
 	{ }
 
 	ioport_value gas_pedal_r();
@@ -100,9 +102,11 @@ protected:
 	optional_ioport m_stickx;
 	optional_ioport m_sticky;
 	output_finder<8> m_cpua_out;
+	output_finder<>m_lampword_out;
 	output_finder<> m_roll_pos;
 	output_finder<> m_pitch_pos_out;
 	emu_timer* m_scanline_timer = nullptr;
+
 
 	/* misc */
 	u16      m_cpua_ctrl = 0;
@@ -113,6 +117,8 @@ protected:
 	int m_adc_ud;
 	int m_adc_lr;
 	uint16_t m_motorbuffer[0x400];
+
+	lamps_t m_lamps;
 
 private:
 	u32 screen_update_bshark(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);

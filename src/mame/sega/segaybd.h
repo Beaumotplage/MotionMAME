@@ -16,7 +16,7 @@
 #include "segaic16.h"
 #include "sega16sp.h"
 #include "screen.h"
-#include "motorsim.h"
+#include "machine/motorsim.h"
 
 // ======================> segaybd_state
 
@@ -52,6 +52,10 @@ public:
 		, m_pitch_pos_out(*this, "pitch")
 		, m_yaw_pos_out(*this, "yaw")
 		, m_lampword_out(*this, "lamps")
+		, m_turntable_motor_sim(86, 171, 5.0f, false)
+		, m_bank_motor_sim(86, 171, 8.0f, false)
+		, m_gloc_left_sim(86, 171, 10.0f, false)
+		, m_gloc_right_sim(86, 171, 10.0f, false)
 
 	{
 	}
@@ -171,22 +175,20 @@ private:
 	uint8_t m_vblank_irq_state = 0;
 	uint8_t m_misc_io_data = 0;
 
-	union {
-		uint16_t word;
-		struct
-		{
-			uint16_t start : 1;
-			uint16_t danger : 1;
-			uint16_t crash : 1;
-			uint16_t emergency : 1;
-		}bits;
-
-	}m_lamps;
+	lamps_t m_lamps;
 
 	//-------------------------------------------------
 	//  r360_output_cb2 - output #2 handler for
 	//  G-Loc R360
 	//-------------------------------------------------
+
+	motor m_turntable_motor_sim;
+	motor m_bank_motor_sim;
+	motor m_gloc_left_sim;
+	motor m_gloc_right_sim;
+
+	//TODO: Analyse and standardise powerdrift
+	//motor pdrift_motor_sim(86, 171, 4.0f, false);
 
 	bool m_gforce = 0; // game specific code
 	int m_gforce_adc_turntable = 0x00;

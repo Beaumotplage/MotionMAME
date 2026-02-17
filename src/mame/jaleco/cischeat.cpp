@@ -215,8 +215,12 @@ void cischeat_state::leds_out_w(offs_t offset, uint16_t data, uint16_t mem_mask)
 	{
 		machine().bookkeeping().coin_counter_w(0, data & 0x01);
 		machine().bookkeeping().coin_counter_w(1, data & 0x02);
-		m_leds[0] = BIT(data, 4);   // start button
-		m_leds[1] = BIT(data, 5);   // ?
+		//m_leds[0] = BIT(data, 4);   // start button
+		//m_leds[1] = BIT(data, 5);   // ?
+
+		m_lamps.bigrun.start = BIT(data, 4);
+		m_lamps.bigrun.race = BIT(data, 5);
+		m_lampword_out = m_lamps.word;
 	}
 }
 
@@ -2071,8 +2075,8 @@ TIMER_DEVICE_CALLBACK_MEMBER(cischeat_state::bigrun_scanline)
 		m_leftright_motor_adc = m_cisco_leftright_motor_sim.run(m_leftright_speedcode, false);
 
 		// The game hardly seems to move the pots, so scaling it up a bit for now
-		m_pitch_pos_out = (int)(128.0f - (6.0f * (float)(m_updown_motor_adc - 128)));
-		m_roll_pos_out = (int)(128.0f - (2.0f * (float)(m_leftright_motor_adc - 128)));
+		m_pitch_pos_out = (int)(128.0f - (4.0f * (float)(m_updown_motor_adc - 128)));
+		m_roll_pos_out = (int)(128.0f - (8.0f * (float)(m_leftright_motor_adc - 128)));
 
 	}
 }

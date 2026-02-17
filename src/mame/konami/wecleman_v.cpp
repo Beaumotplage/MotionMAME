@@ -947,7 +947,8 @@ uint32_t wecleman_state::screen_update_wecleman(screen_device &screen, bitmap_rg
 
 	bool video_on = m_irqctrl & 0x40;
 
-	m_led[0] = (m_selected_ip & 0x04) ? 1 : 0;
+	m_lamps.outrun.start = (m_selected_ip & 0x04) ? 1 : 0;
+	m_lampword_out = m_lamps.word;
 
 	int fg_y = (m_txtram[0x0f24 >> 1] & (TILEMAP_DIMY - 1));
 	int bg_y = (m_txtram[0x0f26 >> 1] & (TILEMAP_DIMY - 1));
@@ -1033,7 +1034,9 @@ uint32_t hotchase_state::screen_update_hotchase(screen_device &screen, bitmap_in
 {
 	bool video_on = (m_irqctrl & 0x40) ? true : false;
 
-	m_led[0] = (m_selected_ip & 0x04) ? 1 : 0; // Start lamp
+	m_lamps.outrun.start = (m_selected_ip & 0x04) ? 1 : 0; // Start lamp
+
+	m_lampword_out = m_lamps.word;
 
 	get_sprite_info();
 

@@ -16,7 +16,7 @@
 #include "segaic16_road.h"
 #include "sega16sp.h"
 #include "screen.h"
-#include "motorsim.h"
+#include "machine/motorsim.h"
 
 // ======================> segahang_state
 
@@ -42,9 +42,10 @@ public:
 		, m_adc_select(0)
 		, m_adc_ports(*this, "ADC%u", 0U)
 		, m_decrypted_opcodes(*this, "decrypted_opcodes")
-		, m_lamps(*this, "lamp%u", 0U)
+		//, m_lamps(*this, "lamp%u", 0U)
 		, m_roll_pos_out(*this, "roll")
 		, m_pitch_pos_out(*this, "pitch")
+		, m_lampword_out(*this, "lamps")
 		, m_scanline_timer(nullptr)
 		, m_updown_motor_sim(61, 192, 4.0f, true)
 		, m_leftright_motor_sim(61, 192, 4.0f, true)
@@ -150,14 +151,16 @@ private:
 	optional_ioport_array<7> m_adc_ports;
 	bool                     m_shadow = false;
 	optional_shared_ptr<uint16_t> m_decrypted_opcodes;
-	output_finder<2>         m_lamps;
+	//output_finder<2>         m_lamps;
 	output_finder<>			m_roll_pos_out;
 	output_finder<>			m_pitch_pos_out;
+	output_finder<>			m_lampword_out;
 
 	//Motor simulator
 	int m_motorcode;
 	int m_adc_ud;
 	int m_adc_lr;
+	lamps_t m_lamps;
 
 	TIMER_CALLBACK_MEMBER(scanline_tick_hangon);
 	emu_timer* m_scanline_timer = nullptr;

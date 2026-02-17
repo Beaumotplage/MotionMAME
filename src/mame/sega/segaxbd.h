@@ -26,7 +26,7 @@
 #include "emupal.h"
 #include "screen.h"
 
-#include "motorsim.h"
+#include "machine/motorsim.h"
 // ======================> segaxbd_state
 
 
@@ -162,17 +162,7 @@ protected:
 	int m_smgp_right_tgt;
 	int m_smgp_right_spd;
 
-	union {
-		uint16_t word;
-		struct
-		{
-			uint16_t altitude : 1;
-			uint16_t start : 1;
-			uint16_t lock : 1;
-			uint16_t danger : 1;
-		}bits;
-	}m_lamps;
-
+	lamps_t m_lamps;
 	public:
 		/* Naughty, but stops the initialisation sequence warnings for now */
 		motor m_updown_motor_sim;

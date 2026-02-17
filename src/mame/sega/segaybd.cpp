@@ -223,14 +223,8 @@ const uint32_t SOUND_CLOCK = 32215900;
 #define TWEAK_IRQ2_SCANLINE     (0)
 
 
-static motor turntable_motor_sim(86, 171, 4.0f,false);
-static motor bank_motor_sim(86, 171, 6.0f, false);
+uint16_t testword;
 
-static motor gloc_left_sim(86, 171, 10.0f, false);
-static motor gloc_right_sim(86, 171, 10.0f, false);
-//TODO - inverted travel time internally for speedscaler - why?
-
-static motor pdrift_motor_sim(86, 171, 4.0f, false);
 
 
 //**************************************************************************
@@ -371,10 +365,10 @@ void segaybd_state::machine_reset()
 {
 	m_irq2_scanline = 170;
 	m_scanline_timer->adjust(m_screen->time_until_pos(223), 223);
-	turntable_motor_sim.reset();
-	bank_motor_sim.reset();
-	gloc_left_sim.reset();
-	gloc_right_sim.reset();
+	m_turntable_motor_sim.reset();
+	m_bank_motor_sim.reset();
+	m_gloc_left_sim.reset();
+	m_gloc_right_sim.reset();
 
 }
 
@@ -472,17 +466,21 @@ TIMER_CALLBACK_MEMBER(segaybd_state::irq2_gen_tick)
 	if (m_gforce)
 	{
 		//Galaxy Force
-		m_gforce_adc_turntable = turntable_motor_sim.run(m_gforce_turnspeed,false);
-		m_gforce_adc_bank = bank_motor_sim.run(m_gforce_bankspeed,false);
+		m_gforce_adc_turntable = m_turntable_motor_sim.run(m_gforce_turnspeed,false);
+		m_gforce_adc_bank = m_bank_motor_sim.run(m_gforce_bankspeed,false);
 
-		m_pitch_pos_out = 255-m_gforce_adc_bank;
-		m_roll_pos_out = 255-m_gforce_adc_turntable;
+		m_pitch_pos_out = 128 -(3 * (m_gforce_adc_bank - 128));
+	//	m_pitch_pos_out = 255 - m_gforce_adc_bank;
+
+		//m_pitch_pos_out = m_gforce_turnspeed;
+	//	m_pitch_pos_out = testword;
+		m_yaw_pos_out = 255-m_gforce_adc_turntable;
 	}
 	else
 	{
 		//Gloc
-		m_gloc_left_pos = gloc_left_sim.run_open_loop(m_gloc_left_motor_pos_target * 8, m_gloc_left_motor_speed);
-		m_gloc_right_pos = gloc_right_sim.run_open_loop(m_gloc_right_motor_pos_target * 8, m_gloc_right_motor_speed);
+		m_gloc_left_pos = m_gloc_left_sim.run_open_loop(m_gloc_left_motor_pos_target * 8, m_gloc_left_motor_speed);
+		m_gloc_right_pos = m_gloc_right_sim.run_open_loop(m_gloc_right_motor_pos_target * 8, m_gloc_right_motor_speed);
 
 		m_roll_pos_out = 128 - ((m_gloc_left_pos - m_gloc_right_pos) / 2);// +/-128 range
 		m_pitch_pos_out = ((m_gloc_left_pos + m_gloc_right_pos) / 2);
@@ -526,37 +524,59 @@ void segaybd_state::gforce2_output_cb1(uint16_t data)
 	//R (left) bank motor lock
 	//T (right) turntable motor lock
 	// nothing = turntable motor lock
-	int speedbits = (data & 0x7);
-	
-	if (data < 0x60)
-	{
-		if (data & 0x08)
-		{
-			m_gforce_bankspeed = speedbits;
-		}
-		else
-		{
-			m_gforce_bankspeed = -speedbits;
-		}
 
-		if (data & 0x20)
+	//data &= 0xfC;
+
+///	int speedbits = (data & 0x7);
+
+//	testword = data;
+
+
+		if (data < 0x20)
 		{
-			m_gforce_turnspeed = speedbits;
+		
+			/*
+			if (data & 0x08)
+			{
+				m_gforce_bankspeed = speedbits;
+			}
+			else
+			{
+				m_gforce_bankspeed = -speedbits;
+			}
+			*/
+
+			if (data & 0x08)
+			{
+				m_gforce_bankspeed = 1;
+			}
+			else if (data & 0x04)
+			{
+				m_gforce_bankspeed = -1;
+			}
+			else
+			{
+				m_gforce_bankspeed = 0;
+			}
+
 		}
-		else if (data & 0x40)
+		else if (data < 0x60)
 		{
-			m_gforce_turnspeed = -speedbits;
+			if (data & 0x20)
+			{
+				m_gforce_turnspeed = 1;//speedbits;
+			}
+			else if (data & 0x40)
+			{
+				m_gforce_turnspeed = -1;//-speedbits;
+			}
+			else
+			{
+				m_gforce_turnspeed = 0;
+			}
 		}
-		else
-		{
-			m_gforce_turnspeed = 0;
-		}
-	}
-	else
-	{
-		m_gforce_bankspeed = 0;
-		m_gforce_turnspeed = 0;
-	}
+	
+	
 
 
 }
@@ -613,15 +633,10 @@ void segaybd_state::gloc_output_cb1(uint16_t data)
 
 void segaybd_state::gloc_output_cb2(uint16_t data)
 {
-	/*
-	m_start_lamp = BIT(data, 2);
-	m_danger_lamp = BIT(data, 5);
-	m_crash_lamp = BIT(data, 6);
-	*/
 
-	m_lamps.bits.start = BIT(data, 2);
-	m_lamps.bits.danger = BIT(data, 5);
-	m_lamps.bits.crash = BIT(data, 6);
+	m_lamps.y_board.start = BIT(data, 2);
+	m_lamps.y_board.danger = BIT(data, 5);
+	m_lamps.y_board.crash = BIT(data, 6);
 
 }
 

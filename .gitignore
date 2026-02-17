@@ -49,3 +49,6 @@ regtests/chdman/temp
 regtests/jedutil/output
 /CMakeLists.txt
 /samples
+/src/mame/sega/segaybd.cpp_old.cpp
+/src/mame/sega/motorsim.h
+/src/mame.zip

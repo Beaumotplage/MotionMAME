@@ -79,8 +79,9 @@ void segahang_state::video_lamps_w(uint8_t data)
 	m_segaic16vid->set_display_enable(data & 0x10);
 
 	// bits 2 & 3: control the lamps
-	m_lamps[1] = BIT(data, 3);
-	m_lamps[0] = BIT(data, 2);
+	m_lamps.sharrier.attract = BIT(data, 3); // General attract lamp
+	m_lamps.sharrier.start = BIT(data, 2); // Start/Credit
+	m_lampword_out = m_lamps.word;
 
 	// bits 0 & 1: update coin counters
 	machine().bookkeeping().coin_counter_w(1, data & 0x02);
@@ -315,7 +316,7 @@ void segahang_state::i8751_p1_w(uint8_t data)
 
 void segahang_state::machine_start()
 {
-	m_lamps.resolve();
+	m_lampword_out.resolve();
 	m_roll_pos_out.resolve();
 	m_pitch_pos_out.resolve();
 
@@ -383,9 +384,8 @@ TIMER_CALLBACK_MEMBER(segahang_state::scanline_tick_hangon)
 
 		m_adc_ud = m_updown_motor_sim.run((m_motorcode >> 4) - 8, brake);
 
-		m_pitch_pos_out = m_adc_ud;
-		m_roll_pos_out = m_adc_lr;
-
+		m_pitch_pos_out = (int)(128.0f + (1.75f * (float)(m_adc_ud - 128)));
+		m_roll_pos_out = (int)(128.0f + (1.75f * (float)(m_adc_lr - 128)));
 	}
 
 	//POST: Right, left, back, forwards

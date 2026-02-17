@@ -1062,7 +1062,7 @@ void wecleman_state::machine_reset()
 
 void wecleman_state::machine_start()
 {
-	m_led.resolve();
+	m_lampword_out.resolve();
 	m_yaw_pos_out.resolve();
 	m_motorcode_out.resolve();
 }

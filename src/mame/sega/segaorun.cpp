@@ -600,7 +600,7 @@ TIMER_DEVICE_CALLBACK_MEMBER(segaorun_state::bankmotor_update)
 
 	m_adc_lr = m_leftright_motor_sim.run(m_motorcode - 8, brake);
 
-	m_roll_pos = m_adc_lr; //(int)(128.0f + (1.0f * (float)(m_adc_lr - 128)));
+	m_roll_pos = (int)(128.0f + (1.25f * (float)(m_adc_lr - 128)));
 
 	m_lampword_out = m_lamps.word;
 
@@ -674,8 +674,8 @@ void segaorun_state::outrun_custom_io_w(offs_t offset, uint16_t data, uint16_t m
 			    //	m_start_lamp = BIT(data, 2);
 				//  m_brake_lamp = BIT(data, 1);
 
-				m_lamps.bits.start = BIT(data, 2);
-				m_lamps.bits.brake = BIT(data, 1);
+				m_lamps.outrun.start = BIT(data, 2);
+				m_lamps.outrun.brake = BIT(data, 1);
 			}
 			return;
 

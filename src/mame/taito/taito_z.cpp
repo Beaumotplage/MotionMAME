@@ -1309,6 +1309,12 @@ void taitoz_state::cpua_ctrl_w(offs_t offset, u16 data, u16 mem_mask)
 	*/
 	for (int i = 0; i < 8; i++)
 		m_cpua_out[i] = BIT(m_cpua_ctrl, i);
+
+	m_lamps.taito_z.pt_right = BIT(m_cpua_ctrl, 5);
+	m_lamps.taito_z.pt_left = BIT(m_cpua_ctrl, 6);
+
+	m_lampword_out = m_lamps.word;
+
 }
 
 
@@ -1527,7 +1533,7 @@ void chasehq_state::chasehq_motor_w(offs_t offset, u16 data)
 		case (0x02 >> 1):
 			m_motorcode_v = (int)((char)(data & 0xFF));
 		break;
-		case (0x05 >> 1):
+		case (0x0e):
 			m_motorcode_h = (int)((char)(data & 0xFF));
 			break;
 		case 0x0:
@@ -3159,6 +3165,7 @@ void taitoz_state::machine_start()
 	m_scanline_timer = timer_alloc(FUNC(taitoz_state::scanline_tick), this);
 	m_roll_pos.resolve();
 	m_pitch_pos_out.resolve();
+	m_lampword_out.resolve();
 }
 
 void taitoz_z80_sound_state::machine_start()

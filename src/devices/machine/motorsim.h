@@ -158,3 +158,65 @@ private:
 
 };
 
+
+/* Consolidate all lamps into an 8-bit lampword*/
+typedef union {
+	uint8_t word;
+	struct
+	{
+		uint8_t start : 1;   // most games
+		uint8_t brake_danger: 1; //outrun _ afterburner, gloc
+		uint8_t lock_crash : 1; //afterburner, gloc
+		uint8_t altitude_emergency : 1; // afterburner _ R360
+	}bits;
+
+
+	//Afterburner
+	struct
+	{
+		uint8_t start : 1;
+		uint8_t danger : 1;
+		uint8_t lock : 1;
+		uint8_t altitude : 1;
+
+	}x_board;
+
+	//Gloc
+	struct
+	{
+		uint8_t start : 1;  
+		uint8_t danger : 1; 
+		uint8_t crash : 1; 
+		uint8_t altitude_emergency : 1; 
+	}y_board;
+
+	//Outrun
+	struct
+	{
+		uint8_t start : 1;
+		uint8_t brake : 1;
+	}outrun;
+
+	//Hangon (space harrier)
+	struct
+	{
+		uint8_t start : 1;
+		uint8_t attract : 1;
+	}sharrier;
+
+	struct
+	{
+		uint8_t start : 1;
+		uint8_t pt_right : 1;
+		uint8_t pt_left : 1;
+
+	}taito_z;
+
+	struct
+	{
+		uint8_t start : 1;
+		uint8_t race : 1;
+	}bigrun;
+
+
+}lamps_t;
